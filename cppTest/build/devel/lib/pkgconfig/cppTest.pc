@@ -1,0 +1,8 @@
+prefix=/home/cr-7/catkin_ws/src/cppTest/build/devel
+
+Name: cppTest
+Description: Description of cppTest
+Version: 0.0.0
+Cflags: 
+Libs: -L${prefix}/lib 
+Requires: 

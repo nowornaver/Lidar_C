@@ -1,0 +1,8 @@
+prefix=/home/cr-7/catkin_ws/src/pussy_angle/build/devel
+
+Name: pussy_angle
+Description: Description of pussy_angle
+Version: 0.0.0
+Cflags: 
+Libs: -L${prefix}/lib 
+Requires: 
