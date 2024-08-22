@@ -66,6 +66,8 @@ int main(int argc , char **argv)
 	vector<vector<Vec4i>> separated_lines;
 	vector<Point> lane;
 	string dir;
+	   string turnDirection;
+
 	vector<double> polyregre;
     VideoCapture video("/dev/video2", cv::CAP_V4L2);
 	// VideoCapture video("test_video.mp4");
@@ -101,66 +103,117 @@ int main(int argc , char **argv)
     ros::Rate loop_rate(60);
     geometry_msgs::Twist push;
     ros::Publisher publisher_push = n.advertise<geometry_msgs::Twist>("push", 1000);
+    int img_center = 640;
 
 int frame_count = 0 ;
 	while (ros::ok)
-	{
-    frame_count++;
-		// 1. 원본 영상을 읽어온다.
-		if (!video.read(img_frame))
-			break;
-		        // 이미지 크기를 1280x720으로 리사이즈
-        cv::resize(img_frame, img_frame, cv::Size(640,480));
-int width = 640;
-int height = 480;
+	{        frame_count++;
 
-	Mat transformed_frame = roadLaneDetector.bird_eye_view(img_frame);
-	Mat mask = roadLaneDetector.img_filter(transformed_frame);     // Canny(img_filter, img_edges, 50, 150); //확인완료
-		    //     Mat mask_bottom_half = mask.rowRange(mask.rows / 2, mask.rows);  //mask.rows = 480
-				// imshow("mask_bottom_half",mask_bottom_half);
-		vector <int> l = roadLaneDetector.Start_lane_detection(mask);
-		        Mat msk = mask.clone(); // mask의 복사본 생성
-	Mat result = roadLaneDetector.sliding_window(transformed_frame,mask,l[0],l[1]);
-    for (size_t i = 0; i < roadLaneDetector.lx.size(); i++) {
-            csv_file << roadLaneDetector.lx[i] << "," << roadLaneDetector.y_vals_left[i] << ",";
-            if (i < roadLaneDetector.rx.size()) {
-                csv_file << roadLaneDetector.rx[i] << "," << roadLaneDetector.y_vals_right[i] << "\n";
+        if (!video.read(img_frame))
+            break;
+
+        cv::resize(img_frame, img_frame, cv::Size(1280, 720));
+
+        Mat transformed_frame = roadLaneDetector.bird_eye_view(img_frame);
+        Mat mask = roadLaneDetector.img_filter(transformed_frame);
+        
+        vector<int> l = roadLaneDetector.Start_lane_detection(mask);
+        Mat msk = mask.clone();
+
+        Mat result = roadLaneDetector.sliding_window(transformed_frame, mask, l[0], l[1]);
+
+        const double WHEELBASE = 0.75;
+
+        if (roadLaneDetector.lx.size() != 0 && roadLaneDetector.lx.size() > 4) {
+            vector<double> left_coeffs = roadLaneDetector.polyfit(roadLaneDetector.lx, roadLaneDetector.y_vals_left, 2);
+            vector<double> right_coeffs = roadLaneDetector.polyfit(roadLaneDetector.rx, roadLaneDetector.y_vals_right, 2);
+
+
+            // double root =-left_coeffs[1]+sqrt(left_coeffs[1]*left_coeffs[1] - 4 * left_coeffs[0]*left_coeffs[2])/2*left_coeffs[0];
+            // double root1 =-left_coeffs[1]-sqrt(left_coeffs[1]*left_coeffs[1] - 4 * left_coeffs[0]*left_coeffs[2])/2*left_coeffs[0];
+            // double d = left_coeffs[1]*left_coeffs[1] - 4 * left_coeffs[0]*left_coeffs[2];
+
+            // cout <<"d = "<<d <<endl;
+
+            // 다항식 계수 저장
+            if (csv_file1.is_open()) {
+                    cout << "csv_file_open" <<endl;
+                for (const auto& coeff : left_coeffs) {
+                    csv_file1 << coeff << " ";
+                }
+                for (const auto& coeff : right_coeffs) {
+                    csv_file1 << coeff << " ";
+                }
+                csv_file1 << "\n";
+            }
+
+            // 슬라이딩 윈도우로 얻은 좌표 저장
+            if (csv_file.is_open()) {
+                for (size_t i = 0; i < roadLaneDetector.lx.size(); ++i) {
+                    csv_file  << roadLaneDetector.lx[i] << "," << roadLaneDetector.y_vals_left[i] << ","
+                             << roadLaneDetector.rx[i] << "," << roadLaneDetector.y_vals_right[i] << "\n";
+                }
+            }
+
+            for (double x : roadLaneDetector.lx) {
+                double curvature = roadLaneDetector.calculateCurvature(left_coeffs, static_cast<double>(x));
+                steering_left_angle = atan(WHEELBASE / curvature);
+                steering_left_angle_degrees = steering_left_angle * (180.0 / M_PI);
+                cout.precision(4);
+                // cout << "Calculated curvature at x = " << x << " is: " << curvature << endl;
+                        circle(transformed_frame , Point(roadLaneDetector.lx[x], 0) ,5 , (0,0,255),-1);  //720 이랑의 교점 y= 720 이랑의 교점
+
+                                    double middleX = (roadLaneDetector.rx[x] + roadLaneDetector.lx[x]) / 2;
+
+            // 중앙값과 비교하여 좌회전 또는 우회전 판단
+         
+            if (middleX < img_center) {
+                turnDirection = "Left Turn";
+            } else if (middleX > img_center) {
+                turnDirection = "Right Turn";
             } else {
-                csv_file << ",\n";
+                turnDirection = "Straight";
             }
-        }
-	// Mat result1= roadLaneDetector.Reverse_transformed(result,roadLaneDetector.transform_matrix);
-	// imshow("result1",result1);
- const double WHEELBASE = 0.75; // 75 cm
 
- if (roadLaneDetector.y_vals.size() % 8 ==0 && roadLaneDetector.x_vals.size() %8 ==0){
-	vector<double> left_coeffs = roadLaneDetector.polyfit(roadLaneDetector.lx, roadLaneDetector.y_vals_left, 2);
-	vector<double> right_coeffs = roadLaneDetector.polyfit(roadLaneDetector.rx, roadLaneDetector.y_vals_right, 2);
-	//coeffs[0] = 상수 coeffs[1]= 1차 coeffs[2] = 2차
- if (csv_file1.is_open()) {
-            for (size_t i = 0; i < left_coeffs.size(); ++i) {
-                csv_file1 << frame_count << "," << i << "," << left_coeffs[i] << "," << right_coeffs[i] << "\n";
+            cout << "Detected turn direction: " << turnDirection << endl;
+
+            }
+
+            for (double x : roadLaneDetector.rx) {
+                double curvature = roadLaneDetector.calculateCurvature(right_coeffs, static_cast<double>(x));
+                steering_right_angle = atan(WHEELBASE / curvature);
+                steering_right_angle_degrees = steering_right_angle * (180.0 / M_PI);
+
+                circle(transformed_frame , Point((roadLaneDetector.rx[x]+roadLaneDetector.lx[x])/2, 0) ,5 , (0,0,255),-1);  //720 이랑의 교점 y= 720 이랑의 교점
+
+            }
+
+        
+            if (turnDirection == "right Turn") {
+                steering_angle =  -(steering_left_angle_degrees + steering_right_angle_degrees) / 2;
+
+            } 
+            else {
+            steering_angle = (steering_left_angle_degrees + steering_right_angle_degrees) / 2;
             }
         }
-	// cout <<"right_Coeffs" <<right_coeffs[2] <<endl;
-    for (double x : roadLaneDetector.lx) {
-        double curvature = roadLaneDetector.calculateCurvature(left_coeffs, static_cast<double>(x));
-steering_left_angle = atan(WHEELBASE * curvature); // 결과는 라디안 단위
-steering_left_angle_degrees = steering_left_angle * (180.0 / M_PI);
-        // 결과 출력
-        cout.precision(4);
-        cout << "Calculated curvature at x = " << x << " is: " << curvature << endl;
-    }
-	    for (double x : roadLaneDetector.rx) {
-        double curvature = roadLaneDetector.calculateCurvature(right_coeffs, static_cast<double>(x));
-steering_right_angle = atan(WHEELBASE * curvature); // 결과는 라디안 단위
-steering_right_angle_degrees = steering_right_angle * (180.0 / M_PI);
-        // 결과 출력
-        cout.precision(4);
-        cout << "Calculated curvature at x = " << x << " is: " << curvature << endl;
-    }
-steering_angle = (steering_left_angle_degrees + steering_right_angle_degrees)/2;
- }
+        // circle(transformed_frame , Point(1280,0 ) ,5 , (0,0,255),-1);  //
+        // circle(transformed_frame , Point(0,0 ) ,5 , (0,0,255),-1);  //y=0 과의 교점 이랑의 교점 을 구해서 시점과 종점 구해서 그 두개를 빼서 좌회전 우회전 구분.
+    
+
+
+        cout <<"Steering_angle"<<steering_angle <<endl;
+
+        imshow("img_frame", img_frame);
+        imshow("transformed_frame", transformed_frame);
+        imshow("mask", mask);
+        imshow("result", result);
+
+        writer.write(img_frame);
+
+        if (waitKey(100) == 27) {
+            break;
+        }
 
 push.angular.z = steering_angle ;
 publisher_push.publish(push);

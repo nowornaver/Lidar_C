@@ -25,7 +25,7 @@ double RoadLaneDetector:: calculateCurvature(const vector<double>& coeffs, doubl
 
     double curvature = abs(second_derivative * first_derivative) / abs(pow(first_derivative , 3));
 
-    return curvature;
+    return 1/curvature;
 }
 double RoadLaneDetector::calculateRadius(double a, double b, double x) {
     double numerator = 1 + (2 * a * x + b) * (2 * a * x + b);  // (1 + (2ax + b)^2)
