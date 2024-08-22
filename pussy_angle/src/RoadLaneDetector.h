@@ -15,7 +15,7 @@ private:
 
 
 public:
-
+    bool stopDetection;
     vector<int> lx, rx;
     vector<int> ly, ry;
     // x, y 값을 저장할 벡터 생성
@@ -26,6 +26,10 @@ vector<int> histogram;
 Mat transform_matrix;
 //    vector<double> left_coeffs;
 //     vector<double> right_coeffs;
+	vector<Vec4i> houghLines(Mat img_mask);
+void separateLine(Mat img_edges, vector<Vec4i> lines);
+
+vector<double> solveQuadratic(double a, double b, double c);
 double calculateRadius(double a, double b, double x);
 vector<double> polyfitGradientDescent(const vector<int>& x_vals, const vector<int>& y_vals, double learning_rate, int iterations);
 Mat Reverse_transformed(Mat result , Mat transfrom_matrix);

@@ -16,6 +16,12 @@ int l_h = 0, l_s = 0, l_v = 100; // 초기값 설정
 int u_h = 255, u_s = 255, u_v = 255;
 int l_h_hls = 0, l_l = 0, l_s_hls = 100; // HLS 하한 값
 int u_h_hls = 255, u_l = 255, u_s_hls = 255; // HLS 상한 값
+double steering_left_angle = 0;
+double steering_left_angle_degrees = 0;
+double steering_right_angle = 0;
+double steering_right_angle_degrees = 0;
+double steering_angle = 0;
+
 void createTrackbars() {
     // 트랙바 생성
     namedWindow("Trackbars");
@@ -35,28 +41,12 @@ void createTrackbars() {
     createTrackbar("U - L1", "Trackbars", &u_s, 255, on_trackbar);
     createTrackbar("U - S1", "Trackbars", &u_v, 255, on_trackbar);
 }
-double steering_left_angle=0;
-double steering_left_angle_degrees=0 ;
-double steering_right_angle=0;
-double steering_right_angle_degrees=0;
-double steering_angle=0;
+
 int main(int argc , char **argv)
 {
 
-    ofstream csv_file1("polynomial_coefficients.csv");
-    if (csv_file1.is_open()) {
-        csv_file1 << "Frame,Polynomial Degree,Left Coefficients,Right Coefficients\n";
-    } else {
-        cerr << "Unable to open file: polynomial_coefficients.csv" << endl;
-        return -1;
-    }
-    ofstream csv_file("lane_coordinates.csv");
-    if (!csv_file.is_open()) {
-        cerr << "Error: Could not open the file 'lane_coordinates.csv' for writing." << endl;
-        return -1;
-    }
-
-    csv_file << "Left X,Left Y,Right X,Right Y\n";  // CSV 헤더
+    createTrackbars();
+    int imageCenterX = 640; 
 
 	RoadLaneDetector roadLaneDetector;
 
@@ -69,7 +59,7 @@ int main(int argc , char **argv)
 	   string turnDirection;
 
 	vector<double> polyregre;
-    VideoCapture video("/dev/video2", cv::CAP_V4L2);
+    VideoCapture video("/dev/video1", cv::CAP_V4L2);
 	// VideoCapture video("test_video.mp4");
 		if (!video.isOpened())
 	{
@@ -105,15 +95,17 @@ int main(int argc , char **argv)
     ros::Publisher publisher_push = n.advertise<geometry_msgs::Twist>("push", 1000);
     int img_center = 640;
 
-int frame_count = 0 ;
+
+
 	while (ros::ok)
-	{        frame_count++;
+	{       
+
+
 
         if (!video.read(img_frame))
             break;
 
         cv::resize(img_frame, img_frame, cv::Size(1280, 720));
-
         Mat transformed_frame = roadLaneDetector.bird_eye_view(img_frame);
         Mat mask = roadLaneDetector.img_filter(transformed_frame);
         
@@ -129,31 +121,12 @@ int frame_count = 0 ;
             vector<double> right_coeffs = roadLaneDetector.polyfit(roadLaneDetector.rx, roadLaneDetector.y_vals_right, 2);
 
 
-            // double root =-left_coeffs[1]+sqrt(left_coeffs[1]*left_coeffs[1] - 4 * left_coeffs[0]*left_coeffs[2])/2*left_coeffs[0];
-            // double root1 =-left_coeffs[1]-sqrt(left_coeffs[1]*left_coeffs[1] - 4 * left_coeffs[0]*left_coeffs[2])/2*left_coeffs[0];
-            // double d = left_coeffs[1]*left_coeffs[1] - 4 * left_coeffs[0]*left_coeffs[2];
 
-            // cout <<"d = "<<d <<endl;
+  
 
-            // 다항식 계수 저장
-            if (csv_file1.is_open()) {
-                    cout << "csv_file_open" <<endl;
-                for (const auto& coeff : left_coeffs) {
-                    csv_file1 << coeff << " ";
-                }
-                for (const auto& coeff : right_coeffs) {
-                    csv_file1 << coeff << " ";
-                }
-                csv_file1 << "\n";
-            }
 
-            // 슬라이딩 윈도우로 얻은 좌표 저장
-            if (csv_file.is_open()) {
-                for (size_t i = 0; i < roadLaneDetector.lx.size(); ++i) {
-                    csv_file  << roadLaneDetector.lx[i] << "," << roadLaneDetector.y_vals_left[i] << ","
-                             << roadLaneDetector.rx[i] << "," << roadLaneDetector.y_vals_right[i] << "\n";
-                }
-            }
+
+    
 
             for (double x : roadLaneDetector.lx) {
                 double curvature = roadLaneDetector.calculateCurvature(left_coeffs, static_cast<double>(x));
@@ -197,8 +170,7 @@ int frame_count = 0 ;
             steering_angle = (steering_left_angle_degrees + steering_right_angle_degrees) / 2;
             }
         }
-        // circle(transformed_frame , Point(1280,0 ) ,5 , (0,0,255),-1);  //
-        // circle(transformed_frame , Point(0,0 ) ,5 , (0,0,255),-1);  //y=0 과의 교점 이랑의 교점 을 구해서 시점과 종점 구해서 그 두개를 빼서 좌회전 우회전 구분.
+
     
 
 
@@ -209,26 +181,24 @@ int frame_count = 0 ;
         imshow("mask", mask);
         imshow("result", result);
 
-        writer.write(img_frame);
+    
 
-        if (waitKey(100) == 27) {
-            break;
-        }
 
-push.angular.z = steering_angle ;
-publisher_push.publish(push);
-cout <<"Steering_angle" <<steering_angle<<endl;
+
+
 
 // 곡률 (단위: 1/미터)
 
 // 방향각 계산
 
-
+push.angular.z = steering_angle ;
+publisher_push.publish(push);
+// cout <<"Steering_angle" <<steering_angle<<endl;
 // 결과를 디그리로 변환
 		// imshow("img_frame",img_frame);
 		// imshow("transformed_frame",transformed_frame);
-		imshow("mask",mask);
-		imshow("result",result);
+		// imshow("mask",mask);
+		// imshow("result",result);
 	writer.write(img_frame);
 		// esc 키 종료
 		if (waitKey(100) == 27){

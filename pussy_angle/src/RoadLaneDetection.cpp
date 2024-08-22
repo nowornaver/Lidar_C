@@ -5,6 +5,64 @@
 #include <string>
 #include <vector>
 // L = 75cm
+
+vector<double> RoadLaneDetector:: solveQuadratic(double a, double b, double c) {
+    vector<double> roots;
+    double discriminant = b * b - 4 * a * c;
+
+    if (discriminant >= 0) {
+        double sqrtDiscriminant = sqrt(discriminant);
+        double x1 = (-b + sqrtDiscriminant) / (2 * a);
+        double x2 = (-b - sqrtDiscriminant) / (2 * a);
+        if (x1 !=1280 || x2 != 1280)
+        roots.push_back(x1);
+        roots.push_back(x2);
+    }
+    return roots;
+}
+vector<Vec4i> RoadLaneDetector::houghLines(Mat img_mask) {
+	/*
+		관심영역으로 마스킹 된 이미지에서 모든 선을 추출하여 반환
+	*/
+	vector<Vec4i> line;
+
+	//확률적용 허프변환 직선 검출 함수 
+	HoughLinesP(img_mask, line, 1,  CV_PI / 180, 20, 10, 20);
+	return line;
+}
+void RoadLaneDetector::separateLine(Mat img_edges, vector<Vec4i> lines) {
+	/*
+		검출된 모든 허프변환 직선들을 기울기 별로 정렬한다.
+		선을 기울기와 대략적인 위치에 따라 좌우로 분류한다.
+	*/
+	stopDetection = false;
+	Point p1, p2;
+	vector<double> slopes;
+
+	//검출된 직선들의 기울기를 계산
+	for (int i = 0; i < lines.size(); i++) {
+		Vec4i line = lines[i];
+		p1 = Point(line[0], line[1]); //직선의 시작점
+		p2 = Point(line[2], line[3]); //직선의 끝나는점
+
+		double slope;
+		if (p2.x - p1.x == 0)  //너무 수직인 직선은 특별한 값
+			slope = 999.0;
+		else
+			slope = (p2.y - p1.y) / (double)(p2.x - p1.x);
+
+		//기울기가 너무 수평인 선은 제외
+		if (abs(slope) == 0) {
+            stopDetection = true;
+		}
+	}
+
+	//선들을 좌우 선으로 분류
+
+
+
+	
+}
 double RoadLaneDetector::derivative(const function<double(double)>& func, double t, double h) {
     return (func(t + h) - func(t - h)) / (2 * h);
 }
@@ -157,23 +215,23 @@ void RoadLaneDetector::processLaneLine(Mat& img_frame, const Vec4f& line) {
 
 Mat RoadLaneDetector::bird_eye_view (Mat img_frame) {
 
-int width = 640;
-int height = 480;
+int width = 1280;
+int height = 720;
 		Point2f src_vertices[4];
 
-    src_vertices[0] = Point(width*0.02 , height*0.8);  // Bottom-left
-    src_vertices[1] = Point(width * 0.85, height*0.8);  // Bottom-right
-    src_vertices[2] = Point(width * 0.56, height * 0.64);  // Top-right
-    src_vertices[3] = Point(width * 0.25, height * 0.64);  // Top-left
+    src_vertices[0] = Point(width*0.25,height);  // Bottom-left
+    src_vertices[1] = Point(width * 0.85, height);  // Bottom-right
+    src_vertices[2] = Point(width * 0.65, height * 0.80);  // Top-right
+    src_vertices[3] = Point(width * 0.40, height * 0.80);  // Top-left
 	// cv::circle(img_frame,src_vertices[0],5,(0,0,255),-1);
 	// cv::circle(img_frame,src_vertices[1],5,(0,0,255),-1);
 	// cv::circle(img_frame,src_vertices[2],5,(0,0,255),-1);
 	// cv::circle(img_frame,src_vertices[3],5,(0,0,255),-1);
 	 Point2f dst_vertices[4];
-    dst_vertices[0] = Point(width * 0.3,height);  // Bottom-left
+    dst_vertices[0] = Point(width * 0.1,height);  // Bottom-left
     dst_vertices[1] = Point(width * 0.8, height);  // Bottom-right
     dst_vertices[2] = Point(width*0.8, 0);  // Top-right
-    dst_vertices[3] = Point(width*0.3, 0);  // Top-left
+    dst_vertices[3] = Point(width*0.1, 0);  // Top-left
     // cv::circle(img_frame,dst_vertices[0],5,(0,0,255),-1);
 	// cv::circle(img_frame,dst_vertices[1],5,(0,0,255),-1);
 	// cv::circle(img_frame,dst_vertices[2],5,(0,0,255),-1);
@@ -181,7 +239,7 @@ int height = 480;
 	Mat matrix = cv::getPerspectiveTransform(src_vertices,dst_vertices);
     transform_matrix = cv::getPerspectiveTransform(dst_vertices,src_vertices);
 	Mat transformed_frame;
-cv::warpPerspective(img_frame, transformed_frame, matrix, cv::Size(640, 480));
+cv::warpPerspective(img_frame, transformed_frame, matrix, cv::Size(1280, 720));
     Mat mask = Mat::zeros(img_frame.size(), CV_8UC1);
     Point poly[1][4];
 
@@ -192,10 +250,12 @@ cv::warpPerspective(img_frame, transformed_frame, matrix, cv::Size(640, 480));
     const Point* pts[1] = { poly[0] };
     int npts = 4;
 
+
     // 다각형 영역을 1로 채우기
     cv::fillPoly(mask, pts, &npts, 1, Scalar(255));
  Mat masked_frame;
     cv::bitwise_and(transformed_frame, transformed_frame, masked_frame, mask);
+
     return masked_frame; 
 }
 vector<int> RoadLaneDetector::Start_lane_detection(Mat mask) {
@@ -238,11 +298,11 @@ Mat RoadLaneDetector::sliding_window(Mat img_frame, Mat mask, int left_base, int
 if (left_base!=0 && right_base!=0) {
     while (y > 0) {
         // 왼쪽 차선 범위 설정
-        int left_start = max(0, left_base - 50);  // 윈도우 너비 확장
-        int left_end = min(mask.cols, left_base + 50);  // 윈도우 너비 확장
+        int left_start = max(0, left_base - 100);  // 윈도우 너비 확장
+        int left_end = min(mask.cols, left_base + 100);  // 윈도우 너비 확장
         if (left_start >= left_end) break; // 유효한 범위가 없으면 종료
 
-        Mat img_left = mask.rowRange(y - 120, y).colRange(left_start, left_end);  // 윈도우 높이 확장 (120 픽셀로 증가)
+        Mat img_left = mask.rowRange(y - 100, y).colRange(left_start, left_end);  // 윈도우 높이 확장 (120 픽셀로 증가)
         vector<vector<Point>> contours_left;
         findContours(img_left, contours_left, RETR_TREE, CHAIN_APPROX_SIMPLE);
         
@@ -262,8 +322,8 @@ if (left_base!=0 && right_base!=0) {
         }
 
         // 오른쪽 차선 범위 설정
-        int right_start = max(0, right_base - 50);  // 윈도우 너비 확장
-        int right_end = min(mask.cols, right_base + 50);  // 윈도우 너비 확장
+        int right_start = max(0, right_base - 100);  // 윈도우 너비 확장
+        int right_end = min(mask.cols, right_base + 100);  // 윈도우 너비 확장
         if (right_start >= right_end) break; // 유효한 범위가 없으면 종료
 
         Mat img_right = mask.rowRange(y - 120, y).colRange(right_start, right_end);  // 윈도우 높이 확장 (120 픽셀로 증가)
@@ -285,8 +345,8 @@ if (left_base!=0 && right_base!=0) {
         }
 
         // 현재 윈도우 표시
-        rectangle(msk, Point(left_base - 50, y), Point(left_base + 100, y - 120), Scalar(255, 255, 255), 2);
-        rectangle(msk, Point(right_base - 50, y), Point(right_base + 100, y - 120), Scalar(255, 255, 255), 2);
+        rectangle(msk, Point(left_base - 100, y), Point(left_base + 100, y - 120), Scalar(255, 255, 255), 2);
+        rectangle(msk, Point(right_base - 100, y), Point(right_base + 100, y - 120), Scalar(255, 255, 255), 2);
 
         // 다음 윈도우로 이동
         y -= 120;  // 윈도우가 큰 만큼 더 많이 이동
@@ -301,7 +361,6 @@ Mat RoadLaneDetector::img_filter (Mat transformed_frame) {
 
 namedWindow("Trackbars");
 
-    // 트랙바 생성
    
     // 트랙바 값 읽기
 
@@ -331,8 +390,7 @@ namedWindow("Trackbars");
     Scalar lower1(l_h_hls , l_l , l_s_hls);
     Scalar upper1(u_h_hls,u_l,u_s_hls);
     inRange(hls_transformed_frame , lower1 , upper1,mask1);
-    imshow("hls_trans",hls_transformed_frame);
-    imshow("iss",mask1);
+
         // Create mask using the trackbar values
         Mat mask;
         Scalar lower(l_h, l_s, l_v);
