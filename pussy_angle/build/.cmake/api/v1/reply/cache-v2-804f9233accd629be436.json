@@ -2498,18 +2498,6 @@
 			"value" : "/home/cr-7/catkin_ws/src/pussy_angle"
 		},
 		{
-			"name" : "realsense2_DIR",
-			"properties" : 
-			[
-				{
-					"name" : "HELPSTRING",
-					"value" : "The directory containing a CMake configuration file for realsense2."
-				}
-			],
-			"type" : "PATH",
-			"value" : "/opt/ros/noetic/lib/x86_64-linux-gnu/cmake/realsense2"
-		},
-		{
 			"name" : "rosconsole_DIR",
 			"properties" : 
 			[

@@ -457,9 +457,6 @@ pussy_angle_BINARY_DIR:STATIC=/home/cr-7/catkin_ws/src/pussy_angle/build
 //Value Computed by CMake
 pussy_angle_SOURCE_DIR:STATIC=/home/cr-7/catkin_ws/src/pussy_angle
 
-//The directory containing a CMake configuration file for realsense2.
-realsense2_DIR:PATH=/opt/ros/noetic/lib/x86_64-linux-gnu/cmake/realsense2
-
 //The directory containing a CMake configuration file for rosconsole.
 rosconsole_DIR:PATH=/opt/ros/noetic/share/rosconsole/cmake
 

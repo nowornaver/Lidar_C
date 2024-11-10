@@ -4,147 +4,48 @@
 #include <iostream>
 #include <string>
 #include <vector>
+
 // L = 75cm
 
-vector<double> RoadLaneDetector:: solveQuadratic(double a, double b, double c) {
-    vector<double> roots;
-    double discriminant = b * b - 4 * a * c;
-
-    if (discriminant >= 0) {
-        double sqrtDiscriminant = sqrt(discriminant);
-        double x1 = (-b + sqrtDiscriminant) / (2 * a);
-        double x2 = (-b - sqrtDiscriminant) / (2 * a);
-        if (x1 !=1280 || x2 != 1280)
-        roots.push_back(x1);
-        roots.push_back(x2);
-    }
-    return roots;
-}
-vector<Vec4i> RoadLaneDetector::houghLines(Mat img_mask) {
-	/*
-		관심영역으로 마스킹 된 이미지에서 모든 선을 추출하여 반환
-	*/
-	vector<Vec4i> line;
-
-	//확률적용 허프변환 직선 검출 함수 
-	HoughLinesP(img_mask, line, 1,  CV_PI / 180, 20, 10, 20);
-	return line;
-}
-void RoadLaneDetector::separateLine(Mat img_edges, vector<Vec4i> lines) {
-	/*
-		검출된 모든 허프변환 직선들을 기울기 별로 정렬한다.
-		선을 기울기와 대략적인 위치에 따라 좌우로 분류한다.
-	*/
-	stopDetection = false;
-	Point p1, p2;
-	vector<double> slopes;
-
-	//검출된 직선들의 기울기를 계산
-	for (int i = 0; i < lines.size(); i++) {
-		Vec4i line = lines[i];
-		p1 = Point(line[0], line[1]); //직선의 시작점
-		p2 = Point(line[2], line[3]); //직선의 끝나는점
-
-		double slope;
-		if (p2.x - p1.x == 0)  //너무 수직인 직선은 특별한 값
-			slope = 999.0;
-		else
-			slope = (p2.y - p1.y) / (double)(p2.x - p1.x);
-
-		//기울기가 너무 수평인 선은 제외
-		if (abs(slope) == 0) {
-            stopDetection = true;
-		}
-	}
-
-	//선들을 좌우 선으로 분류
-
-
-
-	
-}
-double RoadLaneDetector::derivative(const function<double(double)>& func, double t, double h) {
-    return (func(t + h) - func(t - h)) / (2 * h);
-}
 
 // 2차 미분 계산 함수
-double RoadLaneDetector::secondDerivative(const function<double(double)>& func, double t, double h) {
-    return (func(t + h) - 2 * func(t) + func(t - h)) / (h * h);
-}
+
 
 // 곡률 계산 함수
 double RoadLaneDetector:: calculateCurvature(const vector<double>& coeffs, double x) {
+    double curvature = 0 ;
+
+    if (coeffs.size() !=0 && x!=0) {
     double a0 = coeffs[0]; //상수
     double a1 = coeffs[1]; //1차
     double a2 = coeffs[2]; //2차
-
     double first_derivative = a1 + 2 * a2 * x; //1차 도함수
     double second_derivative = 2 * a2; //2차 도함수
 
-    double curvature = abs(second_derivative * first_derivative) / abs(pow(first_derivative , 3));
-
+    curvature = abs(second_derivative * first_derivative) / abs(pow(first_derivative , 3));
+    }
     return 1/curvature;
 }
-double RoadLaneDetector::calculateRadius(double a, double b, double x) {
-    double numerator = 1 + (2 * a * x + b) * (2 * a * x + b);  // (1 + (2ax + b)^2)
-    double denominator = 2 * fabs(a);  // 2|a|
 
-    double radius = numerator / denominator;
+void RoadLaneDetector::polyfit(const int* x_vals, const int* y_vals, int degree) {
+     
 
-    return radius; 
-    }
-// double RoadLaneDetector::calculateCurvature(double a, double b, double x) {
-//     double radius = calculateRadius(a, b, x);
-//     double curvature = 1.0 / radius;  // 커브쳐는 반경의 역수
 
-//     return curvature;
-// }
 
-vector<double> RoadLaneDetector::polyfitGradientDescent(const vector<int>& x_vals, const vector<int>& y_vals, double learning_rate, int iterations) {
-    int n = x_vals.size();
-    double a = 1.0, b = 0.0, c = 0.0; // 초기 계수값
+    int n = 12; //n 행의 수 
 
-    for (int iter = 0; iter < iterations; iter++) {
-        double da = 0.0, db = 0.0, dc = 0.0;
 
-        for (int i = 0; i < n; i++) {
-            double x = x_vals[i];
-            double y = y_vals[i];
-            double y_pred = a * x * x + b * x + c;
-            double error = y_pred - y;
-
-            da += error * x * x;  // a에 대한 편미분
-            db += error * x;      // b에 대한 편미분
-            dc += error;          // c에 대한 편미분
-        }
-
-        // 평균화된 그래디언트
-        da /= n;
-        db /= n;
-        dc /= n;
-
-        // 파라미터 업데이트
-        a -= learning_rate * da;
-        b -= learning_rate * db;
-        c -= learning_rate * dc;
-    }
-
-    return {a, b, c}; // 최적의 a, b, c를 반환
-}
-vector<double> RoadLaneDetector::polyfit(const vector<int>& x_vals, const vector<int>& y_vals, int degree) {
-      vector<double> coeffs_vector;
-
-   if (!x_vals.empty() && !y_vals.empty()) {
-   
-    int n = x_vals.size(); //n 행의 수 
     // cout <<"n = " <<n <<endl; 
     Mat X(n, degree + 1, CV_64F); //degree+1 열
     Mat Y(n, 1, CV_64F);
 
     for (int i = 0; i < n; i++) {
+        if (x_vals[i]!= 0) {
         Y.at<double>(i, 0) = static_cast<double>(y_vals[i]);
         for (int j = 0; j <= degree; j++) {
             X.at<double>(i, j) = pow(x_vals[i], j); //x_vals[i]^j
+        }
+
         }
     }
 
@@ -153,16 +54,15 @@ vector<double> RoadLaneDetector::polyfit(const vector<int>& x_vals, const vector
     Mat XtX = Xt * X;
     Mat XtY = Xt * Y;
     Mat coeffs = XtX.inv() * XtY;
-
     for (int i = 0; i < coeffs.rows; i++) {
-        coeffs_vector.push_back(coeffs.at<double>(i, 0));
+        coeffs_vector[i]= (coeffs.at<double>(i, 0));
     }
-   
-    return coeffs_vector; 
-    }
-    return coeffs_vector;
+
     
-}
+    
+    }
+    
+
 Mat RoadLaneDetector::Reverse_transformed(Mat result , Mat transfrom_matrix) {
 Mat a ; 
 cv::warpPerspective(result, a, transfrom_matrix, cv::Size(640, 480));
@@ -171,47 +71,7 @@ cv::warpPerspective(result, a, transfrom_matrix, cv::Size(640, 480));
 
     return a;
 }
-void RoadLaneDetector::processLaneLine(Mat& img_frame, const Vec4f& line) {
-    // 기울기와 절편 추출
-    float slope = line[1] / line[0]; // 기울기
-    float intercept = line[3] - slope * line[2]; // 절편
 
-    // x, y 값을 저장할 벡터 생성
-
-
-    // 직선 위의 점 생성
-    for (int x = 0; x < img_frame.cols; x++) {
-        int y = static_cast<int>(slope * x + intercept); // y = mx + b
-        if (y >= 0 && y < img_frame.rows) { // 유효한 y 범위 체크
-            x_vals.push_back(x);
-            y_vals.push_back(y);
-        }
-    }
-  for (size_t i = 0; i < x_vals.size() - 1; i++) {
-        cv::line(img_frame, Point(x_vals[i], y_vals[i]), Point(x_vals[i + 1], y_vals[i + 1]), cv::Scalar(0, 255, 0), 1);
-    }
-
-  
-}
- const Vec4f RoadLaneDetector::li (vector<int> left_positions ,vector<int> y_vals) {
-    if (!left_positions.empty() && !y_vals.empty()) {
-        vector<Point2f> points;
-        for (size_t i = 0 ; i<left_positions.size() ; i ++) {
-            points.push_back(Point2f(left_positions[i] , y_vals[i]));
-        }
-
-        Vec4f line ; 
-        cv::fitLine(points, line, cv::DIST_L2, 0, 0.01, 0.01);    
-        
-
-
-        return line;
-        }
-    
-    return Vec4f(0,0,0,0);
-
-    
- }
 
 Mat RoadLaneDetector::bird_eye_view (Mat img_frame) {
 
@@ -219,10 +79,10 @@ int width = 1280;
 int height = 720;
 		Point2f src_vertices[4];
 
-    src_vertices[0] = Point(width*0.25,height);  // Bottom-left
-    src_vertices[1] = Point(width * 0.85, height);  // Bottom-right
-    src_vertices[2] = Point(width * 0.65, height * 0.80);  // Top-right
-    src_vertices[3] = Point(width * 0.40, height * 0.80);  // Top-left
+    src_vertices[0] = Point(width*0.20,height*0.9);  // Bottom-left
+    src_vertices[1] = Point(width * 0.90, height*0.9);  // Bottom-right
+    src_vertices[2] = Point(width * 0.58, height * 0.65);  // Top-right
+    src_vertices[3] = Point(width * 0.40, height * 0.65);  // Top-left
 	// cv::circle(img_frame,src_vertices[0],5,(0,0,255),-1);
 	// cv::circle(img_frame,src_vertices[1],5,(0,0,255),-1);
 	// cv::circle(img_frame,src_vertices[2],5,(0,0,255),-1);
@@ -250,12 +110,10 @@ cv::warpPerspective(img_frame, transformed_frame, matrix, cv::Size(1280, 720));
     const Point* pts[1] = { poly[0] };
     int npts = 4;
 
-
     // 다각형 영역을 1로 채우기
     cv::fillPoly(mask, pts, &npts, 1, Scalar(255));
  Mat masked_frame;
     cv::bitwise_and(transformed_frame, transformed_frame, masked_frame, mask);
-
     return masked_frame; 
 }
 vector<int> RoadLaneDetector::Start_lane_detection(Mat mask) {
@@ -263,6 +121,7 @@ vector<int> RoadLaneDetector::Start_lane_detection(Mat mask) {
     vector<int> lane(2, 0); // 크기가 2인 벡터로 초기화 (왼쪽과 오른쪽 차선 위치)
  histogram.resize(mask.cols, 0); // 멤버 변수 histogram 초기화
          for (int i = 0; i < mask.cols; i++) {
+            if (countNonZero(mask.col(i)) >100)
             histogram[i] = countNonZero(mask.col(i));
         }
 
@@ -293,68 +152,176 @@ for (int i = midpoint; i < histogram.size(); i++) {
 }
 
 Mat RoadLaneDetector::sliding_window(Mat img_frame, Mat mask, int left_base, int right_base) {
+    // cout <<"left_base" <<left_base<<endl ; 
     Mat msk = mask.clone();
     int y = mask.rows;
-if (left_base!=0 && right_base!=0) {
-    while (y > 0) {
-        // 왼쪽 차선 범위 설정
-        int left_start = max(0, left_base - 100);  // 윈도우 너비 확장
-        int left_end = min(mask.cols, left_base + 100);  // 윈도우 너비 확장
-        if (left_start >= left_end) break; // 유효한 범위가 없으면 종료
+    currentSize1 = 0;
+// cout <<"count " <<count << endl; 
+if (left_base!=0 && right_base!=0 ) {
 
-        Mat img_left = mask.rowRange(y - 100, y).colRange(left_start, left_end);  // 윈도우 높이 확장 (120 픽셀로 증가)
-        vector<vector<Point>> contours_left;
-        findContours(img_left, contours_left, RETR_TREE, CHAIN_APPROX_SIMPLE);
+
+    while (y > 0) { //6번 실행됌 while 문  //720 
+  //y = 720 600 480 
+        // 왼쪽 차선 범위 설정
+        int left_start = max(0, left_base - 80);  // 윈도우 너비 확장 
+        int left_end = min(mask.cols, left_base + 80);  // 윈도우 너비 확장
+        if (left_start >= left_end) break; // 유효한 범위가 없으면 종료
+        Mat img_left = mask.rowRange(y - 60, y).colRange(left_start, left_end);  // 윈도우 높이 확장 (120 픽셀로 증가)
+
+
+        // imshow("img_left",img_left);
+        // cout <<"Y1 =" <<y <<endl; 
+
+        // vector<vector<Point>> contours_left;
+            // cout <<"y1 = " <<y <<endl ; //720
+        int non_zero_count = countNonZero(img_left);
+        // cout <<"non_zero_count" <<non_zero_count <<endl;  //if non_zero_count =0 일 경우에 어떻게 할 것인가. 즉 흰색 픽셀이 나오지 않았을 경우 어떻게 할것인가. 정해야댐
+        // 그리고 최소한의 임계값(threshold) 흰색 픽셀이 몇개 이상인지도 정하면 노이즈에 강력하게 만들 수 있을 것 같음.
+        // cv::findContours(img_left, contours_left, RETR_TREE, CHAIN_APPROX_SIMPLE); //M.m00 값이 0이 안나오게 하는게 내 목표 
         
         // 왼쪽 차선의 중심 계산
-        if (!contours_left.empty()) {
-            Moments M = moments(contours_left[0]);
-            if (M.m00 != 0) {
+        if (non_zero_count> 0 ) {
+            // cout <<"Y2 = " <<y <<endl; 
+            Moments M = moments(img_left,true);  //슬라이딩 윈도우 첫번째 y1 = 660 , y2 = 540 y3= 420 y3 = 300 y4 = 180 y5 = 60
+            // cout <<"M.m00 = " <<M.m00 <<endl; 
+            if (M.m00 != 0) { 
                 int cx = static_cast<int>(M.m10 / M.m00);
-                lx.push_back(left_start + cx);
-                x_vals.push_back(left_start+cx);
+                if (currentSize <12) {  //currentSize 여기서 012345 까지 돔
+                // cout <<"CurrentSize"<<currentSize<<endl;
+                // cout <<"Y3 = " <<y <<endl; 
 
-                left_base = left_start + cx;
-                y_vals_left.push_back(y - 60); // y 값 추가 (중앙으로)
-                y_vals.push_back(y-60);
-                drawContours(img_frame, contours_left, -1, Scalar(255, 123, 0), 2); // 왼쪽 차선 그리기
+                // cout <<"left_start+cx" <<left_start+cx <<endl;   
+                lx[currentSize]=(left_start + cx); //lx 차선 픽셀 중심의 좌표
+
+                // x_vals.push_back(left_start+c
+                left_base = lx[currentSize];
+                // cout <<"y-60 = "<<y-60 <<endl; 
+                y_vals_left[currentSize] = y - 60; // y 값 추가 (중앙으로)
+                // circle(transformed_frame, Point(lx[0],720) ,5 , (0,0,255),-1);  //720 이랑의 교점 y= 720 이랑의 교점
+                // circle(transformed_frame, Point(lx[11], y_vals_left[11]) ,5 , (0,0,255),-1);  //720 이랑의 교점 y= 720 이랑의 교점
+                // circle(transformed_frame, Point((lx[0]+lx[11])/2, 360) ,5 , (0,0,255),-1);  //720 이랑의 교점 y= 720 이랑의 교점
+                // circle(transformed_frame, Point(lx[6], y_vals_left[6]) ,5 , (0,0,255),-1);  //720 이랑의 교점 y= 720 이랑의 교점
+
+
+                            currentSize++;
+
+                // cout <<"y_vals_left[0]" <<y_vals_left[0] <<endl ; 
+                // y_vals.push_back(y-60);
+                // cout <<currentSize <<endl; 
+                }
+
+
+                
+
             }
+
+
         }
 
-        // 오른쪽 차선 범위 설정
-        int right_start = max(0, right_base - 100);  // 윈도우 너비 확장
-        int right_end = min(mask.cols, right_base + 100);  // 윈도우 너비 확장
+//데이터 보정은 나중에 하고 일단은 그냥 곡률로 넘어가야겠다.. ㅅ1ㅂ
+        // // 오른쪽 차선 범위 설정
+        int right_start = max(0, right_base - 80);  // 윈도우 너비 확장
+        int right_end = min(mask.cols, right_base + 80);  // 윈도우 너비 확장
         if (right_start >= right_end) break; // 유효한 범위가 없으면 종료
 
-        Mat img_right = mask.rowRange(y - 120, y).colRange(right_start, right_end);  // 윈도우 높이 확장 (120 픽셀로 증가)
-        vector<vector<Point>> contours_right;
-        findContours(img_right, contours_right, RETR_TREE, CHAIN_APPROX_SIMPLE);
-        
+        Mat img_right = mask.rowRange(y - 60, y).colRange(right_start, right_end);  // 윈도우 높이 확장 (120 픽셀로 증가)
+        int non_zero_count1 = countNonZero(img_right);
+        // cout <<"non_zero_count1 = " <<non_zero_count1 <<endl; 
         // 오른쪽 차선의 중심 계산
-        if (!contours_right.empty()) {
-            Moments M = moments(contours_right[0]);
+        // if (non_zero_count1 == 0 ) {
+        //     y_vals_right[currentSize1] = y-60;
+        //     rx[currentSize1];
+
+        // }
+        if (non_zero_count1 > 0) {
+            Moments M = moments(img_right , true);
+            // cout <<"M.m00 = " <<M.m00<<endl; 
             if (M.m00 != 0) {
                 int cx = static_cast<int>(M.m10 / M.m00);
-                rx.push_back(right_start + cx);
-                x_vals.push_back(right_start+cx);
+                if (currentSize1 <12) {
+                rx[currentSize1]=(right_start + cx);
+                // cout <<"right_start + cx" << right_start + cx <<endl ; 
                 right_base = right_start + cx;
-                y_vals.push_back(y-60);
-                y_vals_right.push_back(y - 60); // y 값 추가 (중앙으로)
-                drawContours(img_frame, contours_right, -1, Scalar(255, 0, 0), 2); // 오른쪽 차선 그리기
+                y_vals_right[currentSize1]=(y - 60); // y 값 추가 (중앙으로)
+                // cout <<"rx[currentSize] = " << rx[currentSize] <<endl ; 
+                // cout <<"y_vals_right[currentSize] = " << y_vals_right[currentSize] <<endl ; 
+
+                circle(transformed_frame, Point(rx[currentSize1], y_vals_right[currentSize1]) ,5 , (0,0,255),-1);  //720 이랑의 교점 y= 720 이랑의 교점
+
+                currentSize1++;
+
             }
         }
+        
+        }
+        if (non_zero_count1 == 0 ) {
+
+ 
+            rx[currentSize1] =prev_rx[currentSize1];
+            y_vals_right[currentSize1] = y-60;
+            currentSize1++;
+        }
+
+       
 
         // 현재 윈도우 표시
-        rectangle(msk, Point(left_base - 100, y), Point(left_base + 100, y - 120), Scalar(255, 255, 255), 2);
-        rectangle(msk, Point(right_base - 100, y), Point(right_base + 100, y - 120), Scalar(255, 255, 255), 2);
+        cv::rectangle(msk, Point(left_base - 80, y), Point(left_base + 80, y - 60), Scalar(255, 255, 255), 2);
+        cv::rectangle(msk, Point(right_base - 80, y), Point(right_base + 80, y - 60), Scalar(255, 255, 255), 2);
 
         // 다음 윈도우로 이동
-        y -= 120;  // 윈도우가 큰 만큼 더 많이 이동
+        // cout <<"Y"<<y <<endl;
+        // cout <<"CurrentSize" <<currentSize <<endl;
+
+
+
+        y -= 60;  // 윈도우가 큰 만큼 더 많이 이동
+
+        //왜 lx[0] 이 0이 나오는지?
+
+    
+
+
     }
+    
 }
     return msk;
 }
+double RoadLaneDetector::ROC(const int *x_vals , const int*y_vals) {
+//R = h/2 + w^2/8H
+double steering_angle = 0;
+double W = sqrt( pow(x_vals[0]-x_vals[11],2) +pow(720,2) ) ;
+Point M = Point((x_vals[0] + x_vals[11]) / 2, 360); //A B 의 중점
+if (x_vals[0]-x_vals[11] != 0) {
+double m = 720/(x_vals[0]-x_vals[11]); //기울기
+    double m_inv = -1.0 / m; // 기울기 m의 역수
+    
+      double min_difference = std::numeric_limits<double>::max();
+    Point C = Point(x_vals[0],y_vals[0]); // 중점을 초기화
 
+    // Arc 위의 점들 중에서 기울기 -m_inv와 가장 가까운 점을 찾음
+    for (int i = 0; i < 11; i++) {
+
+        double m_candidate = static_cast<double>(y_vals[i] - M.y) / (x_vals[i] - M.x);
+        double difference = std::abs(m_candidate - m_inv);
+        if (difference < min_difference) {
+            min_difference = difference;
+            C = Point(x_vals[i], y_vals[i]);
+            
+        }
+    }
+
+    // H 값 계산: 중점 M과 점 C 사이의 거리
+    double H = sqrt(pow(C.x - M.x, 2) + pow(C.y - M.y, 2));
+    // 곡률 계산
+    
+    double R = (H / 2.0) + (pow(W, 2) / (8.0 * H));
+    steering_angle = tan(wheelbase/R);
+    // if (steering_angle <=0.00001) {
+    //        steering_angle =0;
+    // }  
+}
+return steering_angle;
+}
 Mat RoadLaneDetector::img_filter (Mat transformed_frame) {
 
 
@@ -389,7 +356,7 @@ namedWindow("Trackbars");
 
     Scalar lower1(l_h_hls , l_l , l_s_hls);
     Scalar upper1(u_h_hls,u_l,u_s_hls);
-    inRange(hls_transformed_frame , lower1 , upper1,mask1);
+    cv::inRange(hls_transformed_frame , lower1 , upper1,mask1);
 
         // Create mask using the trackbar values
         Mat mask;
@@ -397,7 +364,7 @@ namedWindow("Trackbars");
         Scalar upper(u_h, u_s, u_v);
         cv::inRange(hsv_transformed_frame,lower, upper,mask);
 Mat combined;
-    bitwise_or(mask, mask1, combined);
+    cv::bitwise_or(mask, mask1, combined);
 
 
 return combined;
